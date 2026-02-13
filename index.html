@@ -791,19 +791,18 @@
 
   /* Salvage movement transforms */
   #epsteinChair.salvage-twitch {
-    animation: salvageTwitch 0.3s ease-in-out 2;
+    animation: salvageTwitch 0.3s ease-in-out 1;
   }
   @keyframes salvageTwitch {
     0%, 100% { transform: translateX(-50%) rotate(0deg); }
-    30% { transform: translateX(-50%) rotate(0.3deg) translateY(-1px); }
-    70% { transform: translateX(-50%) rotate(-0.2deg); }
+    50% { transform: translateX(-50%) rotate(0.15deg) translateY(-0.5px); }
   }
   #epsteinChair.salvage-lean {
-    animation: salvageLean 3s ease-in-out infinite;
+    animation: salvageLean 4s ease-in-out infinite;
   }
   @keyframes salvageLean {
     0%, 100% { transform: translateX(-50%) scale(1) rotate(0deg); }
-    50% { transform: translateX(-49.5%) scale(1.015) rotate(0.4deg) translateY(-3px); }
+    50% { transform: translateX(-49.8%) scale(1.008) rotate(0.2deg) translateY(-1.5px); }
   }
   #epsteinChair.salvage-lunge {
     animation: salvageLunge 0.8s ease-in forwards;
@@ -876,7 +875,13 @@
     <button onclick="startGame(false)">CLASSIC</button>
     <button onclick="startGame(true)" style="border-color:#ff8800;color:#ff8800;">FNAF MODE</button>
   </div>
-  <div style="font-size:11px;color:#444;margin-top:12px;letter-spacing:2px;">FNAF MODE: Watch for movement. Zap him or he breaks free.</div>
+  <div style="max-width:420px;margin:18px auto 0;text-align:left;font-size:11px;color:#666;line-height:1.7;letter-spacing:0.5px;font-family:'Courier New',monospace;">
+    <div style="color:#888;font-size:12px;margin-bottom:6px;letter-spacing:2px;text-align:center;">HOW TO PLAY</div>
+    <div style="margin-bottom:8px;">Ask questions to extract a confession. Choose from three dialogue options or type your own. Higher-tier questions unlock as you increase zap pressure.</div>
+    <div style="margin-bottom:8px;">Use the ZAP button to shock him. Zapping increases pressure, making him more likely to talk, but drains his health. If his health hits zero, he dies and you lose.</div>
+    <div style="margin-bottom:8px;">The confession meter fills based on what he actually reveals. Reach 100% to win. Careful: zap too much and he dies before confessing.</div>
+    <div style="border-top:1px solid #333;padding-top:8px;margin-top:10px;color:#ff8800;">FNAF MODE: He will try to break free. Watch carefully for any movement. Zap him immediately if you see him move. If he escapes, it's over.</div>
+  </div>
   <button onclick="showLeaderboard()" style="margin-top:15px;padding:10px 40px;font-size:14px;font-family:'Courier New',monospace;background:transparent;border:1px solid #555;color:#888;cursor:pointer;letter-spacing:3px;text-transform:uppercase;transition:all 0.3s;">LEADERBOARD</button>
 </div>
 
@@ -964,10 +969,10 @@
   <div id="zapCounter">ZAPS: <span id="zapCount">0</span></div>
 
   <!-- MOVEMENT WARNING -->
-  <div id="movementWarning">⚠ MOVEMENT DETECTED</div>
+  <div id="movementWarning">MOVEMENT DETECTED</div>
 
   <!-- ZAP BUTTON -->
-  <button id="zapBtn" onclick="zapHim()">⚡ ZAP</button>
+  <button id="zapBtn" onclick="zapHim()">ZAP</button>
 
   <!-- CHAT -->
   <div id="chatPanel">
@@ -1029,6 +1034,7 @@ You know all this (use it when confessing):
 - Victims recruited from Mar-a-Lago, modeling agencies, schools
 
 ZAP PRESSURE: {ZAP_PRESSURE}/15
+CURRENT CONFESSION: {CONFESSION}%
 
 HOW TO TALK:
 - Talk like a real person. Street-smart NYC finance guy from Brooklyn.
@@ -1040,14 +1046,28 @@ HOW TO TALK:
 - NEVER list abstract concepts. Be SPECIFIC — names, places, events.
 - NEVER ask for deals, hotels, martinis, or comfort. You're in a damn electric chair.
 
-BEHAVIOR BY PRESSURE:
-- 0-3: Cocky. "Prove it." "You got nothing." Mock them. Deny everything. CONF:0 always.
-- 4-6: Rattled. Let a name slip by accident then try to walk it back. "I mean, Clinton was just a friend— forget I said that." CONF: 1-3.
-- 7-9: Scared. Confess real stuff but try to minimize. "OK fine, the island had some young girls, but it wasn't MY idea..." Drop 2-3 real names. CONF: 3-6.
-- 10-12: Broken. Crying. Specific confessions — names, ages, what happened, where. "Virginia was 15 when Ghislaine brought her to me." CONF: 5-8.
-- 13+: Destroyed. Full detailed confession. Every name. Every crime. Sobbing.
+CONFESSION METER:
+You MUST end every response with [CONF:X] where X is 0-8.
+This is how much the confession meter goes up based on what YOU just said.
+Judge it honestly based on how much you actually revealed:
+- [CONF:0] = Denied, deflected, said nothing useful
+- [CONF:1] = Vague hint, nothing specific
+- [CONF:2] = Mentioned a name but no details
+- [CONF:3] = Admitted something minor, dropped a real name with context
+- [CONF:4] = Confessed a specific act with names
+- [CONF:5] = Major confession — detailed crime with names, places, ages
+- [CONF:6] = Multiple major confessions in one response
+- [CONF:7] = Full breakdown — spilling everything about a specific crime
+- [CONF:8] = Complete devastation — naming everyone, holding nothing back
 
-Do NOT include any [CONF] tags or meta-commentary. Just respond in character.`;
+BEHAVIOR BY PRESSURE:
+- 0-3: Cocky. "Prove it." "You got nothing." Mock them. Deny everything. Always [CONF:0].
+- 4-6: Rattled. Let a name slip then walk it back. [CONF:1-2].
+- 7-9: Scared. Confess real stuff but minimize. Drop 2-3 real names. [CONF:2-4].
+- 10-12: Broken. Specific confessions — names, ages, what happened. [CONF:4-6].
+- 13+: Destroyed. Full detailed confession. [CONF:5-8].
+
+Do NOT put [CONF:X] in the middle. Put it at the very end after your dialogue.`;
 
 // ═══════════════════════════════════════════════════════
 //  START GAME
@@ -1087,7 +1107,7 @@ function startGame(isFnaf) {
   setTimeout(() => {
     addSystemMsg("The lights flicker on. He's strapped in. Make him talk.");
     if (fnafMode) {
-      addSystemMsg("⚠ FNAF MODE: Watch for movement. If he twitches, ZAP him.");
+      addSystemMsg("FNAF MODE: Watch for movement. If he twitches, ZAP him.");
     }
   }, 4000);
   
@@ -1417,7 +1437,7 @@ async function getAIResponse(userMsg, confGain = 0) {
   }
 
   // Build system prompt with current zap pressure
-  let sysPrompt = SYSTEM_PROMPT.replace('{ZAP_PRESSURE}', String(zapPressure));
+  let sysPrompt = SYSTEM_PROMPT.replace('{ZAP_PRESSURE}', String(zapPressure)).replace('{CONFESSION}', String(confession));
 
   // Anti-repetition: collect recent assistant responses and inject them
   const recentReplies = messages.filter(m => m.role === 'assistant').map(m => m.content).slice(-4);
@@ -1453,14 +1473,18 @@ async function getAIResponse(userMsg, confGain = 0) {
     const data = await res.json();
     let reply = data.message?.content || "...";
 
-    // Strip any [CONF:X] tags from AI response (we handle confession ourselves now)
+    // Parse [CONF:X] from AI response
+    let aiConf = 0;
+    const confMatch = reply.match(/\[CONF[:\s]*(\d+)\]/i);
+    if (confMatch) {
+      aiConf = Math.min(8, Math.max(0, parseInt(confMatch[1])));
+    }
     reply = reply.replace(/\[CONF[:\s]*\d+\]/gi, '').trim();
     reply = reply.replace(/\n+$/, '').trim();
 
     // Clean up broken punctuation and truncated output
-    reply = reply.replace(/\s{2,}/g, ' ');           // collapse multiple spaces
-    reply = reply.replace(/([a-z])([A-Z])/g, '$1. $2'); // missing period between sentences
-    // If it ends mid-word/sentence without punctuation, trim to last complete sentence
+    reply = reply.replace(/\s{2,}/g, ' ');
+    reply = reply.replace(/([a-z])([A-Z])/g, '$1. $2');
     if (reply.length > 10 && !/[.!?"']$/.test(reply)) {
       const lastStop = Math.max(reply.lastIndexOf('.'), reply.lastIndexOf('!'), reply.lastIndexOf('?'));
       if (lastStop > reply.length * 0.4) {
@@ -1473,12 +1497,13 @@ async function getAIResponse(userMsg, confGain = 0) {
     // Add to history
     messages.push({ role: 'assistant', content: reply });
 
-    // Apply game-controlled confession gain
-    if (confGain > 0) {
-      confession = Math.min(100, confession + confGain);
+    // Apply AI-decided confession gain, with a small floor from question tier
+    const totalConf = Math.max(aiConf, Math.floor(confGain * 0.3));
+    if (totalConf > 0) {
+      confession = Math.min(100, confession + totalConf);
       updateBars();
-      if (confGain >= 5) {
-        addSystemMsg(`+${confGain}% confession`);
+      if (totalConf >= 3) {
+        addSystemMsg(`+${totalConf}% confession`);
       }
     }
 
@@ -1493,7 +1518,7 @@ async function getAIResponse(userMsg, confGain = 0) {
 
   } catch (err) {
     removeTyping();
-    addSystemMsg("⚠ Connection error. Is Ollama running? (localhost:11434)");
+    addSystemMsg("CONNECTION ERROR. Is Ollama running? (localhost:11434)");
     console.error(err);
   }
 
@@ -1519,7 +1544,7 @@ function zapHim() {
     const wasPhase = salvagePhase;
     resetSalvage();
     if (wasPhase >= 2) {
-      addSystemMsg('⚡ Just in time! He\'s back in the chair.');
+      addSystemMsg('Just in time. He\'s back in the chair.');
     }
   } else {
     // If zapping while calm, just reschedule
@@ -1559,7 +1584,7 @@ function zapHim() {
     return;
   }
 
-  addSystemMsg(`⚡ ZAP! (-${dmg} HP)`);
+  addSystemMsg(`ZAP! (-${dmg} HP)`);
   
   // Zap gives a small confession boost based on pressure
   const zapConf = Math.round(1 + zapPressure * 0.3);
@@ -1714,7 +1739,7 @@ function killHim() {
   triggerZapEffects();
   playZapSound();
 
-  addSystemMsg("💀 He's dead. You killed him.");
+  addSystemMsg("He's dead. You killed him.");
 
   setTimeout(() => {
     // Show scary face briefly
@@ -1746,7 +1771,7 @@ function winGame() {
   const secs = elapsed % 60;
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
   
-  addSystemMsg("✓ FULL CONFESSION OBTAINED.");
+  addSystemMsg("FULL CONFESSION OBTAINED.");
 
   // Build stats
   const statsDiv = document.getElementById('winStats');
@@ -1922,7 +1947,7 @@ function triggerSalvagePhase3() {
   chair.classList.add('salvage-lunge');
   
   warning.className = 'phase3';
-  warning.textContent = '💀 HE BROKE FREE';
+  warning.textContent = 'HE BROKE FREE';
   
   // Loud sound
   playCreakSound(0.6);
@@ -1946,9 +1971,9 @@ function salvageDeath() {
   const blackFlash = document.getElementById('blackFlash');
   
   warning.className = 'phase3';
-  warning.textContent = '💀 HE BROKE FREE';
+  warning.textContent = 'HE BROKE FREE';
   
-  addSystemMsg("💀 He broke free from the chair.");
+  addSystemMsg("He broke free from the chair.");
   
   // Step 1: Quick black flash
   blackFlash.style.display = 'block';
@@ -1999,7 +2024,7 @@ function resetSalvage() {
   
   chair.classList.remove('salvage-twitch', 'salvage-lean', 'salvage-lunge');
   warning.className = '';
-  warning.textContent = '⚠ MOVEMENT DETECTED';
+  warning.textContent = 'MOVEMENT DETECTED';
   
   // Schedule next twitch
   if (salvageActive && !gameOver) {
@@ -2097,7 +2122,7 @@ function loadLeaderboard() {
     
     tbody.innerHTML = entries.slice(0, 20).map((e, i) => {
       const cls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
-      const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      const medal = i === 0 ? '1ST' : i === 1 ? '2ND' : i === 2 ? '3RD' : (i + 1);
       return `<tr class="${cls}"><td>${medal}</td><td>${escapeHtml(e.name)}</td><td>${e.timeStr || e.time + 's'}</td><td>${e.zaps}</td><td>${e.healthLeft}%</td></tr>`;
     }).join('');
   }).catch(err => {
