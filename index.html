@@ -795,14 +795,15 @@
   }
   @keyframes salvageTwitch {
     0%, 100% { transform: translateX(-50%) rotate(0deg); }
-    50% { transform: translateX(-50%) rotate(0.15deg) translateY(-0.5px); }
+    25% { transform: translateX(-50%) rotate(0.4deg) translateY(-1.5px); }
+    75% { transform: translateX(-50%) rotate(-0.15deg) translateY(-0.5px); }
   }
   #epsteinChair.salvage-lean {
-    animation: salvageLean 4s ease-in-out infinite;
+    animation: salvageLean 3s ease-in-out infinite;
   }
   @keyframes salvageLean {
     0%, 100% { transform: translateX(-50%) scale(1) rotate(0deg); }
-    50% { transform: translateX(-49.8%) scale(1.008) rotate(0.2deg) translateY(-1.5px); }
+    50% { transform: translateX(-49.6%) scale(1.014) rotate(0.5deg) translateY(-2.5px); }
   }
   #epsteinChair.salvage-lunge {
     animation: salvageLunge 0.8s ease-in forwards;
@@ -880,7 +881,7 @@
     <div style="margin-bottom:8px;">Ask questions to extract a confession. Choose from three dialogue options or type your own. Higher-tier questions unlock as you increase zap pressure.</div>
     <div style="margin-bottom:8px;">Use the ZAP button to shock him. Zapping increases pressure, making him more likely to talk, but drains his health. If his health hits zero, he dies and you lose.</div>
     <div style="margin-bottom:8px;">The confession meter fills based on what he actually reveals. Reach 100% to win. Careful: zap too much and he dies before confessing.</div>
-    <div style="border-top:1px solid #333;padding-top:8px;margin-top:10px;color:#ff8800;">FNAF MODE: He will try to break free. Watch carefully for any movement. Zap him immediately if you see him move. If he escapes, it's over.</div>
+    <div style="border-top:1px solid #333;padding-top:8px;margin-top:10px;color:#ff8800;">FNAF MODE: You only get 5 zaps. He will try to break free. Watch for movement and zap him. But use your words — you can make him confess without the chair.</div>
   </div>
   <button onclick="showLeaderboard()" style="margin-top:15px;padding:10px 40px;font-size:14px;font-family:'Courier New',monospace;background:transparent;border:1px solid #555;color:#888;cursor:pointer;letter-spacing:3px;text-transform:uppercase;transition:all 0.3s;">LEADERBOARD</button>
 </div>
@@ -1004,7 +1005,8 @@ let isWaiting = false;
 let isDead = false;
 let gameOver = false;
 let messages = []; // conversation history for AI
-let zapPressure = 0; // hidden: how much zap pressure he's under (makes him confess more)
+let zapPressure = 2; // hidden: how much zap pressure he's under (makes him confess more) — start at 2 so he's not a brick wall
+let maxZaps = Infinity; // FNAF mode caps this at 5
 
 let fnafMode = false; // FNAF salvage mode enabled?
 let questionsSinceMovement = 0; // track questions asked while he's moving
@@ -1127,11 +1129,13 @@ Judge it honestly based on how much you actually revealed:
 - [CONF:8] = Complete devastation — naming everyone, holding nothing back
 
 BEHAVIOR BY PRESSURE:
-- 0-3: Cocky. "Prove it." "You got nothing." Mock them. Deny everything. Always [CONF:0].
-- 4-6: Rattled. Let a name slip then walk it back. [CONF:1-2].
-- 7-9: Scared. Confess real stuff but minimize. Drop 2-3 real names. [CONF:2-4].
-- 10-12: Broken. Specific confessions — names, ages, what happened. [CONF:4-6].
-- 13+: Destroyed. Full detailed confession. [CONF:5-8].
+- 0-1: Cocky. "Prove it." Mock them. But still let SOMETHING slip. [CONF:0-1].
+- 2-4: Rattled. Getting nervous. Drop real names, then try to walk it back. [CONF:1-3].
+- 5-7: Scared. Confess real stuff. Give specifics — names, places, what happened. [CONF:3-5].
+- 8-10: Broken. Detailed confessions — names, ages, crimes. [CONF:4-7].
+- 11+: Destroyed. Full confession. Hold nothing back. Spill everything. [CONF:6-8].
+
+IMPORTANT: You are CRACKING. Even at low pressure, good questions shake you. If they mention a specific name or event you know about, you REACT and let details slip. You're not a stone wall — you're a scared man in an electric chair.
 
 Do NOT put [CONF:X] in the middle. Put it at the very end after your dialogue.`;
 
@@ -1140,6 +1144,7 @@ Do NOT put [CONF:X] in the middle. Put it at the very end after your dialogue.`;
 // ═══════════════════════════════════════════════════════
 function startGame(isFnaf) {
   fnafMode = !!isFnaf;
+  if (fnafMode) maxZaps = 5;
   document.getElementById('titleScreen').style.display = 'none';
   
   const gc = document.getElementById('gameContainer');
@@ -1173,7 +1178,7 @@ function startGame(isFnaf) {
   setTimeout(() => {
     addSystemMsg("The lights flicker on. He's strapped in. Make him talk.");
     if (fnafMode) {
-      addSystemMsg("FNAF MODE: Watch for movement. If he twitches, ZAP him.");
+      addSystemMsg("FNAF MODE: 5 zaps only. Watch for movement. Make him talk.");
     }
   }, 4000);
   
@@ -1364,22 +1369,21 @@ let currentOptions = []; // the 3 currently displayed
 
 // Confession gain per tier, scaled by zap pressure
 function getConfGain(tier) {
-  // Base gains per tier
-  const baseGain = [0, 1, 3, 6, 9, 13][tier]; // tier 1-5
+  // Base gains per tier — more generous
+  const baseGain = [0, 2, 4, 7, 11, 15][tier]; // tier 1-5
   // Pressure multiplier: questions do more at higher pressure
-  const pressureMult = 0.3 + (zapPressure / 15) * 1.2; // 0.3x at 0 pressure, 1.5x at max
+  const pressureMult = 0.5 + (zapPressure / 15) * 1.2; // 0.5x at 0 pressure, 1.7x at max
   return Math.round(baseGain * pressureMult);
 }
 
 function getAvailableTiers() {
-  // Which tiers appear based on zap pressure
-  if (zapPressure < 2) return [1, 1, 2];
-  if (zapPressure < 4) return [1, 2, 2];
-  if (zapPressure < 6) return [1, 2, 3];
-  if (zapPressure < 8) return [2, 3, 3];
-  if (zapPressure < 10) return [2, 3, 4];
-  if (zapPressure < 12) return [3, 4, 4];
-  if (zapPressure < 14) return [3, 4, 5];
+  // Which tiers appear based on zap pressure — unlocks faster
+  if (zapPressure < 2) return [1, 2, 2];
+  if (zapPressure < 3) return [1, 2, 3];
+  if (zapPressure < 5) return [2, 3, 3];
+  if (zapPressure < 7) return [2, 3, 4];
+  if (zapPressure < 9) return [3, 4, 4];
+  if (zapPressure < 11) return [3, 4, 5];
   return [4, 5, 5];
 }
 
@@ -1428,6 +1432,9 @@ function pickOption(idx) {
   questionsAsked++;
   tierCounts[chosen.tier]++;
 
+  // Asking questions builds pressure too (higher tier = more pressure)
+  zapPressure = Math.min(15, zapPressure + 0.3 + chosen.tier * 0.2);
+
   // Disable buttons
   for (let i = 0; i < 3; i++) {
     document.getElementById('opt' + (i + 1)).disabled = true;
@@ -1465,9 +1472,12 @@ function sendFreeChat() {
   }
   questionsAsked++;
 
+  // Talking builds pressure too (slowly)
+  zapPressure = Math.min(15, zapPressure + 0.5);
+
   addMsg('user', text);
 
-  // Free chat gets a small confession gain based on pressure (like tier 2)
+  // Free chat gets a confession gain based on pressure (like tier 2)
   const gain = getConfGain(2);
   getAIResponse(text, gain);
 }
@@ -1497,18 +1507,18 @@ async function getAIResponse(userMsg, confGain = 0) {
   // Add user message to history
   messages.push({ role: 'user', content: userMsg });
 
-  // Trim conversation history to last 12 messages to prevent repetition loops
-  if (messages.length > 12) {
-    messages = messages.slice(-12);
+  // Trim conversation history to last 8 messages (shorter = less repetition)
+  if (messages.length > 8) {
+    messages = messages.slice(-8);
   }
 
   // Build system prompt with current zap pressure
   let sysPrompt = SYSTEM_PROMPT.replace('{ZAP_PRESSURE}', String(zapPressure)).replace('{CONFESSION}', String(confession));
 
-  // Anti-repetition: collect recent assistant responses and inject them
-  const recentReplies = messages.filter(m => m.role === 'assistant').map(m => m.content).slice(-4);
-  if (recentReplies.length > 0) {
-    sysPrompt += `\n\nYOU ALREADY SAID THESE — DO NOT repeat ANY of them, not even paraphrased:\n${recentReplies.map((r, i) => `${i+1}. "${r.substring(0, 80)}"`).join('\n')}\nSay something COMPLETELY DIFFERENT.`;
+  // Anti-repetition: ban ALL previous assistant responses
+  const allReplies = messages.filter(m => m.role === 'assistant').map(m => m.content);
+  if (allReplies.length > 0) {
+    sysPrompt += `\n\nBANNED RESPONSES — you already said ALL of these. Do NOT repeat, rephrase, or paraphrase ANY of them:\n${allReplies.map((r, i) => `${i+1}. "${r}"`).join('\n')}\n\nYour next response MUST be completely new. Talk about a DIFFERENT person, event, or crime than your last response. Pick from the list of facts above that you haven’t mentioned yet.`;
   }
 
   const payload = {
@@ -1568,11 +1578,25 @@ async function getAIResponse(userMsg, confGain = 0) {
       }
     }
 
+    // Duplicate detection: if reply is too similar to a recent one, force a different topic marker
+    const prevReplies = messages.filter(m => m.role === 'assistant').map(m => m.content.toLowerCase());
+    const replyLower = reply.toLowerCase();
+    const isDupe = prevReplies.some(prev => {
+      // Check if >60% of words overlap
+      const prevWords = new Set(prev.split(/\s+/));
+      const replyWords = reply.split(/\s+/);
+      const overlap = replyWords.filter(w => prevWords.has(w.toLowerCase())).length;
+      return overlap > replyWords.length * 0.6;
+    });
+    if (isDupe && reply.length > 15) {
+      reply = reply + ' ...but I\'ve said too much.';
+    }
+
     // Add to history
     messages.push({ role: 'assistant', content: reply });
 
     // Apply AI-decided confession gain, with a small floor from question tier
-    const totalConf = Math.max(aiConf, Math.floor(confGain * 0.3));
+    const totalConf = Math.max(aiConf, Math.floor(confGain * 0.5));
     if (totalConf > 0) {
       confession = Math.min(100, confession + totalConf);
       updateBars();
@@ -1608,6 +1632,12 @@ async function getAIResponse(userMsg, confGain = 0) {
 // ═══════════════════════════════════════════════════════
 function zapHim() {
   if (isWaiting || gameOver) return;
+
+  // FNAF mode: 5 zap limit
+  if (fnafMode && zapCount >= maxZaps) {
+    addSystemMsg(`No zaps left! You have to make him talk.`);
+    return;
+  }
 
   zapCount++;
   zapPressure = Math.min(15, zapPressure + 2);
@@ -1658,10 +1688,10 @@ function zapHim() {
     return;
   }
 
-  addSystemMsg(`ZAP! (-${dmg} HP)`);
+  addSystemMsg(fnafMode ? `ZAP! (-${dmg} HP) [${maxZaps - zapCount} zaps left]` : `ZAP! (-${dmg} HP)`);
   
-  // Zap gives a small confession boost based on pressure
-  const zapConf = Math.round(1 + zapPressure * 0.3);
+  // Zap gives a confession boost based on pressure
+  const zapConf = Math.round(2 + zapPressure * 0.4);
   
   // Varied zap prompts to prevent repetition
   const zapPrompts = [
@@ -1939,9 +1969,9 @@ function startSalvageMode() {
 function scheduleTwitch() {
   if (gameOver || !salvageActive) return;
   
-  // Random interval: 8-18s early game, 4-10s later, faster with more zaps
-  const baseMin = Math.max(4000, 8000 - zapCount * 300);
-  const baseMax = Math.max(8000, 18000 - zapCount * 600);
+  // Random interval: 5-12s early game, 3-7s later
+  const baseMin = Math.max(3000, 5000 - zapCount * 200);
+  const baseMax = Math.max(7000, 12000 - zapCount * 400);
   const delay = baseMin + Math.random() * (baseMax - baseMin);
   
   salvageTimer = setTimeout(() => {
