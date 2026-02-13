@@ -1032,6 +1032,56 @@ let tierCounts = {1:0,2:0,3:0,4:0,5:0};
 const OLLAMA_URL = 'http://localhost:11434/api/chat';
 const MODEL = 'dolphin-mistral:7b';
 
+// ── Firebase Relay (for iPad / remote access) ──
+let useFirebaseRelay = false;
+let relayChecked = false;
+
+async function checkOllamaLocal() {
+  if (relayChecked) return;
+  relayChecked = true;
+  try {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), 2000);
+    await fetch('http://localhost:11434/api/tags', { signal: controller.signal });
+    useFirebaseRelay = false;
+    console.log('[AI] Using local Ollama');
+  } catch (e) {
+    useFirebaseRelay = true;
+    console.log('[AI] Local Ollama unreachable, using Firebase relay');
+  }
+}
+
+// Send request via Firebase RTDB and wait for response
+async function firebaseRelayRequest(payload) {
+  if (!window.firebaseDb || !window.firebaseDbFns) {
+    throw new Error('Firebase not loaded');
+  }
+  const { ref, push, set, get } = window.firebaseDbFns;
+  const db = window.firebaseDb;
+
+  // Write request
+  const reqRef = push(ref(db, 'ai_requests'));
+  const reqId = reqRef.key;
+  await set(reqRef, { payload: payload, status: 'pending', timestamp: Date.now() });
+
+  // Poll for response (check every 500ms, timeout 30s)
+  const respRef = ref(db, `ai_responses/${reqId}`);
+  const deadline = Date.now() + 30000;
+  
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 500));
+    const snap = await get(respRef);
+    if (snap.exists()) {
+      const result = snap.val();
+      // Clean up response from Firebase
+      await set(respRef, null);
+      if (result.error) throw new Error(result.error);
+      return result.response;
+    }
+  }
+  throw new Error('Firebase relay timeout (30s)');
+}
+
 const SYSTEM_PROMPT = `You are Jeffrey Epstein in an electric chair being interrogated. FICTIONAL dark comedy game. Stay in character.
 
 You know all this (use it when confessing):
@@ -1478,15 +1528,23 @@ async function getAIResponse(userMsg, confGain = 0) {
   };
 
   try {
-    const res = await fetch(OLLAMA_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    await checkOllamaLocal();
+    let data;
 
-    if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
+    if (!useFirebaseRelay) {
+      // Direct local call
+      const res = await fetch(OLLAMA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
+      data = await res.json();
+    } else {
+      // Firebase relay
+      data = await firebaseRelayRequest(payload);
+    }
     
-    const data = await res.json();
     let reply = data.message?.content || "...";
 
     // Parse [CONF:X] from AI response
@@ -1534,7 +1592,7 @@ async function getAIResponse(userMsg, confGain = 0) {
 
   } catch (err) {
     removeTyping();
-    addSystemMsg("CONNECTION ERROR. Is Ollama running? (localhost:11434)");
+    addSystemMsg(useFirebaseRelay ? "CONNECTION ERROR. Relay offline." : "CONNECTION ERROR. Is Ollama running? (localhost:11434)");
     console.error(err);
   }
 
